@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   online-stats:
-    build: .
+    image: cwhitio/online-stats:latest
     container_name: online-stats
     ports:
       - "8000:8000"

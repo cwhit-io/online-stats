@@ -31,7 +31,8 @@ online-stats/
 ### Local Development
 
 1. Clone the repository:
-   ```bash
+   ```
+   bash
    git clone <repository-url>
    cd online-stats
    ```
@@ -54,12 +55,26 @@ online-stats/
 
 ### Docker Setup
 
+#### Option 1: Use Published Docker Image (Recommended)
+
+```bash
+# Pull and run the published image
+docker run -d -p 8000:8000 --env-file .env --name online-stats cwhitio/online-stats:latest
+
+# Or use docker-compose with the published image
+docker-compose up
+```
+
+#### Option 2: Build Locally
+
 1. Build and run with Docker Compose:
+
    ```bash
    docker-compose up --build
    ```
 
 2. Or build and run manually:
+
    ```bash
    docker build -t online-stats .
    docker run -it --env-file .env -v $(pwd):/app online-stats
