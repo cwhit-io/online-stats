@@ -65,24 +65,63 @@ online-stats/
 
 ## Usage
 
-### YouTube Analytics
+### Running the Complete Analytics Pipeline
+
+The main script (`src/main.py`) runs both YouTube and Vimeo analytics and publishes results to the database:
+
+```bash
+# Run with default attendance.csv
+python src/main.py
+
+# Run with custom CSV file
+python src/main.py --csv data/my_attendance.csv
+```
+
+### Individual Analytics Scripts
+
+**YouTube Analytics:**
+
 ```bash
 python src/youtube.py
 ```
 
-### Vimeo Analytics
+**Vimeo Analytics:**
+
 ```bash
 python src/vimeo.py
+```
+
+### Docker Usage
+
+**Run the complete pipeline:**
+
+```bash
+docker-compose up --build
+```
+
+**Run individual scripts in Docker:**
+
+```bash
+# YouTube analytics
+docker-compose run --rm online-stats python src/youtube.py
+
+# Vimeo analytics
+docker-compose run --rm online-stats python src/vimeo.py
+
+# Complete pipeline
+docker-compose run --rm online-stats python src/main.py
 ```
 
 ## API Requirements
 
 ### YouTube
+
 - YouTube Data API v3 enabled
 - OAuth 2.0 credentials
 - Channel ID
 
 ### Vimeo
+
 - Vimeo API access token
 - User ID
 - Pro/Business account for analytics (Free accounts have limited API access)

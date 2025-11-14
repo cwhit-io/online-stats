@@ -12,6 +12,4 @@ services:
       - PYTHONPATH=/app
     env_file:
       - .env
-    command: python --version
-    # Uncomment the line below to run a specific script
-    # command: python src/vimeo.py
+    command: python src/main.py
