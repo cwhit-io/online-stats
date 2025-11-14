@@ -1,0 +1,17 @@
+version: "3.8"
+
+services:
+  online-stats:
+    build: .
+    container_name: online-stats
+    volumes:
+      - .:/app
+      - ./data:/app/data
+      - ./output:/app/output
+    environment:
+      - PYTHONPATH=/app
+    env_file:
+      - .env
+    command: python --version
+    # Uncomment the line below to run a specific script
+    # command: python src/vimeo.py
