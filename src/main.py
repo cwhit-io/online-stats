@@ -252,7 +252,9 @@ class OnlineStatsPublisher:
 
         try:
             # Step 1: Run analytics and get merged results
-            merged_results = self.run_analytics(start_date=start_date, end_date=end_date)
+            merged_results = self.run_analytics(
+                start_date=start_date, end_date=end_date
+            )
 
             # Step 2: Publish each result to database
             if merged_results:
@@ -265,7 +267,7 @@ class OnlineStatsPublisher:
                         "vimeo_9am": result.get("vimeo_9am"),
                         "youtube_1045am": result.get("youtube_1045am"),
                     }
-                    
+
                     # Publish to database (or simulate in dry-run mode)
                     self.publish_to_database(
                         stats, result["date"], dry_run=dry_run, overwrite=overwrite
@@ -282,46 +284,6 @@ class OnlineStatsPublisher:
             print(f"\n💥 Process failed: {e}")
             sys.exit(1)
 
-    def extract_stats_from_csv(self, csv_file):
-        """Extract the latest statistics from a specific CSV file."""
-        if not os.path.exists(csv_file):
-            raise FileNotFoundError(f"CSV file not found: {csv_file}")
-
-        try:
-            df = pd.read_csv(csv_file)
-
-            # Get the most recent row (assuming sorted by date)
-            if len(df) == 0:
-                raise ValueError("No data found in CSV file")
-
-            # Sort by date to get the latest
-            df["date_parsed"] = pd.to_datetime(df["date"], errors="coerce")
-            df = df.sort_values("date_parsed", ascending=False)
-            latest_row = df.iloc[0]
-
-            # Extract the required columns
-            stats = {
-                "youtube_9am": self._extract_numeric_value(
-                    latest_row.get("youtube 9am")
-                ),
-                "vimeo_1045am": self._extract_numeric_value(
-                    latest_row.get("vimeo 1045am")
-                ),
-                "vimeo_9am": self._extract_numeric_value(latest_row.get("vimeo 9am")),
-                "youtube_1045am": self._extract_numeric_value(
-                    latest_row.get("youtube 1045am")
-                ),
-            }
-
-            # Get the date for this data
-            data_date = latest_row.get("date")
-            if data_date:
-                # Try to parse and format the date consistently
-                try:
-                    parsed_date = pd.to_datetime(data_date).date()
-                    data_date = parsed_date.isoformat()
-                except:
-                    pass  # Keep original format if parsing fails
 
 def main():
     """Main entry point."""

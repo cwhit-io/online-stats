@@ -163,9 +163,13 @@ class VimeoLiveViewsFinder:
                 }
             )
 
-        # Process each date
+        # Process each date (only Sundays)
         results = []
         for date in sorted(date_groups.keys()):
+            # Skip if not Sunday (weekday 6 = Sunday)
+            if date.weekday() != 6:
+                continue
+
             videos = date_groups[date]
 
             result = {
@@ -414,117 +418,6 @@ class VimeoLiveViewsFinder:
             return result
 
         return result
-
-    def process_attendance_csv(
-        self, csv_file="attendance_with_youtube.csv", output_file=None
-    ):
-        """Process the attendance CSV and populate Vimeo view counts."""
-        if not output_file:
-            output_file = csv_file.replace(".csv", "_with_vimeo.csv")
-
-        try:
-            df = pd.read_csv(csv_file)
-        except Exception as e:
-            print(f"Error reading CSV file: {e}")
-            return
-
-        print(f"Processing {len(df)} attendance records...")
-
-        # Ensure Vimeo columns exist
-        if "vimeo 9am" not in df.columns:
-            df["vimeo 9am"] = ""
-        if "vimeo 1045am" not in df.columns:
-            df["vimeo 1045am"] = ""
-        if "vimeo notes" not in df.columns:
-            df["vimeo notes"] = ""
-
-        # Fetch all videos once
-        print("\\nFetching all videos from Vimeo...")
-        all_videos = self.get_all_videos()
-
-        if not all_videos:
-            print("No videos found. Exiting.")
-            return
-
-        # Save raw data
-        with open("all_vimeo_videos.json", "w") as f:
-            json.dump(all_videos, f, indent=2)
-        print(f"Saved raw video data to all_vimeo_videos.json\\n")
-
-        processed_count = 0
-        updated_count = 0
-
-        for index, row in df.iterrows():
-            try:
-                date_str = str(row["date"]).strip()
-
-                for date_format in ["%m/%d/%Y", "%m/%d/%y", "%Y-%m-%d"]:
-                    try:
-                        target_date = datetime.strptime(date_str, date_format).date()
-                        break
-                    except ValueError:
-                        continue
-                else:
-                    print(
-                        f"Skipping row {index + 1}: Could not parse date '{date_str}'"
-                    )
-                    continue
-
-                processed_count += 1
-
-                # Skip if both columns already have data
-                if (
-                    pd.notna(row.get("vimeo 9am"))
-                    and str(row.get("vimeo 9am")).strip()
-                    and pd.notna(row.get("vimeo 1045am"))
-                    and str(row.get("vimeo 1045am")).strip()
-                ):
-                    print(f"Skipping {target_date}: Vimeo data already exists")
-                    continue
-
-                print(f"\\nProcessing {target_date} (row {index + 1})...")
-
-                # Find matching video(s)
-                result = self.find_stream_for_date(target_date, all_videos)
-
-                # Update the dataframe
-                # Update the dataframe
-                row_updated = False
-
-                if result["9am"] is not None:
-                    df.at[index, "vimeo 9am"] = str(int(result["9am"]))
-                    row_updated = True
-
-                if result["10:45am"] is not None:
-                    df.at[index, "vimeo 1045am"] = str(int(result["10:45am"]))
-                    row_updated = True
-
-                if result["notes"]:
-                    df.at[index, "vimeo notes"] = result["notes"]
-
-                if row_updated:
-                    updated_count += 1
-
-            except Exception as e:
-                print(f"Error processing row {index + 1}: {e}")
-                continue
-
-        # Save the updated CSV
-        try:
-            df.to_csv(output_file, index=False, encoding="utf-8-sig")
-            print(f"\\n{'='*60}")
-            print(f"SUCCESS: Processed {processed_count} rows")
-            print(f"SUCCESS: Updated {updated_count} rows with Vimeo data")
-            print(f"SUCCESS: Saved to: {output_file}")
-
-            if self.discrepancy_log:
-                log_file = "vimeo_discrepancies.log"
-                with open(log_file, "w", encoding="utf-8") as f:
-                    f.write("\\n\\n".join(self.discrepancy_log))
-                print(f"INFO: Logged {len(self.discrepancy_log)} notes to: {log_file}")
-
-        except Exception as e:
-            print(f"Error saving CSV file: {e}")
 
 
 def main():

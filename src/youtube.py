@@ -330,241 +330,46 @@ class YouTubeLiveViewsFinder:
 
         return result
 
-    def process_attendance_csv(self, csv_file="attendance.csv", output_file=None):
-        """
-        Process the attendance CSV and populate YouTube view counts.
-
-        Args:
-            csv_file (str): Input CSV file path
-            output_file (str): Output CSV file path (optional)
-        """
-        if not output_file:
-            output_file = csv_file.replace(".csv", "_with_youtube.csv")
-
-        # Read the CSV file
-        try:
-            df = pd.read_csv(csv_file)
-        except Exception as e:
-            print(f"Error reading CSV file: {e}")
-            return
-
-        print(f"Processing {len(df)} attendance records...")
-        print(f"Columns: {list(df.columns)}")
-
-        # Ensure YouTube columns exist
-        if "youtube 9am" not in df.columns:
-            df["youtube 9am"] = ""
-        if "youtube 1045am" not in df.columns:
-            df["youtube 1045am"] = ""
-        if "youtube notes" not in df.columns:
-            df["youtube notes"] = ""
-
-        # Fetch all live streams once
-        print("\nFetching all live streams from YouTube...")
-        all_streams = self.get_all_live_streams()
-
-        if not all_streams:
-            print("No live streams found. Exiting.")
-            return
-
-        # Save raw data for reference
-        with open("all_streams.json", "w") as f:
-            json.dump(all_streams, f, indent=2)
-        print(f"Saved raw stream data to all_streams.json")
-
-        processed_count = 0
-        updated_count = 0
-
-        for index, row in df.iterrows():
-            try:
-                # Parse the date
-                date_str = str(row["date"]).strip()
-
-                # Handle different date formats
-                for date_format in ["%m/%d/%Y", "%m/%d/%y", "%Y-%m-%d"]:
-                    try:
-                        target_date = datetime.strptime(date_str, date_format).date()
-                        break
-                    except ValueError:
-                        continue
-                else:
-                    print(
-                        f"Skipping row {index + 1}: Could not parse date '{date_str}'"
-                    )
-                    continue
-
-                processed_count += 1
-
-                # Skip if both YouTube columns already have data
-                if (
-                    pd.notna(row.get("youtube 9am"))
-                    and str(row.get("youtube 9am")).strip()
-                    and pd.notna(row.get("youtube 1045am"))
-                    and str(row.get("youtube 1045am")).strip()
-                ):
-                    print(f"Skipping {target_date}: YouTube data already exists")
-                    continue
-
-                print(f"\nProcessing {target_date} (row {index + 1})...")
-
-                # Find matching stream(s)
-                result = self.find_stream_for_date(target_date, all_streams)
-
-                # Update the dataframe
-                # Update the dataframe
-                row_updated = False
-
-                if result["9am"] is not None:
-                    df.at[index, "youtube 9am"] = str(int(result["9am"]))
-                    row_updated = True
-
-                if result["10:45am"] is not None:
-                    df.at[index, "youtube 1045am"] = str(int(result["10:45am"]))
-                    row_updated = True
-
-                if result["notes"]:
-                    df.at[index, "youtube notes"] = result["notes"]
-
-                if row_updated:
-                    updated_count += 1
-
-            except Exception as e:
-                print(f"Error processing row {index + 1}: {e}")
-                continue
-
-        # Save the updated CSV with UTF-8 encoding
-        try:
-            df.to_csv(output_file, index=False, encoding="utf-8-sig")
-            print(f"\n{'='*60}")
-            print(f"SUCCESS: Processed {processed_count} rows")
-            print(f"SUCCESS: Updated {updated_count} rows with YouTube data")
-            print(f"SUCCESS: Saved to: {output_file}")
-
-            # Save discrepancy log
-            if self.discrepancy_log:
-                log_file = "youtube_discrepancies.log"
-                with open(log_file, "w", encoding="utf-8") as f:
-                    f.write("\n\n".join(self.discrepancy_log))
-                print(
-                    f"WARNING: Logged {len(self.discrepancy_log)} discrepancies to: {log_file}"
-                )
-
-        except Exception as e:
-            print(f"Error saving CSV file: {e}")
-
     def process_date_range(self, start_date, end_date, output_file=None):
-        """Process live streams within a date range and generate statistics."""
+        """Process streams within a date range and generate statistics."""
         if not output_file:
             output_file = f'youtube_stats_{start_date.strftime("%Y%m%d")}_{end_date.strftime("%Y%m%d")}.csv'
 
-        print(f"Processing YouTube live streams from {start_date} to {end_date}")
+        print(f"Processing YouTube streams from {start_date} to {end_date}")
 
-        # Fetch live streams in date range
+        # Fetch streams in date range
         all_streams = self.get_all_live_streams(
             start_date=start_date, end_date=end_date
         )
 
         if not all_streams:
-            print("No live streams found in date range.")
-            return
+            print("No streams found in date range.")
+            return []
 
-        # Group streams by date
-        date_groups = {}
-        for stream in all_streams:
-            start_str = stream.get("live_start")
-            if not start_str:
-                continue
-
-            local_time = self.utc_to_local(start_str)
-            if not local_time:
-                continue
-
-            stream_date = local_time.date()
-
-            # Skip if outside our range
-            if stream_date < start_date or stream_date > end_date:
-                continue
-
-            if stream_date not in date_groups:
-                date_groups[stream_date] = []
-
-            # Calculate duration
-            end_str = stream.get("live_end")
-            if end_str:
-                end_time = self.utc_to_local(end_str)
-                duration = (end_time - local_time).total_seconds() / 3600  # hours
-            else:
-                duration = 0
-
-            # Filter out very short streams (less than 30 minutes)
-            if duration < 0.5:
-                continue
-
-            date_groups[stream_date].append(
-                {
-                    "stream": stream,
-                    "local_start": local_time,
-                    "duration": duration,
-                    "start_hour": local_time.hour + local_time.minute / 60,
-                    "views": int(stream.get("views", 0)),
-                }
-            )
-
-        # Process each date
+        # Process each Sunday in the date range
         results = []
-        for date in sorted(date_groups.keys()):
-            streams = date_groups[date]
+        current_date = start_date
 
-            result = {
-                "date": date.strftime("%m/%d/%Y"),
-                "youtube_9am": None,
-                "youtube_1045am": None,
-                "youtube_notes": "",
-            }
+        while current_date <= end_date:
+            # Only process Sundays (weekday 6 = Sunday)
+            if current_date.weekday() == 6:
+                print(f"Processing Sunday: {current_date}")
 
-            # Apply the same logic as find_stream_for_date
-            if len(streams) == 2:
-                # Sort by start time
-                streams.sort(key=lambda x: x["start_hour"])
-                result["youtube_9am"] = streams[0]["views"]
-                result["youtube_1045am"] = streams[1]["views"]
-                result["youtube_notes"] = "Two streams found"
-            elif len(streams) == 1:
-                stream = streams[0]
-                if stream["duration"] > 2.5:
-                    # Long stream - counts for both services
-                    result["youtube_9am"] = stream["views"]
-                    result["youtube_1045am"] = stream["views"]
-                    result["youtube_notes"] = f'Long stream ({stream["duration"]:.1f}h)'
-                else:
-                    # Short stream - guess based on time
-                    if 8 <= stream["start_hour"] <= 10:
-                        result["youtube_9am"] = stream["views"]
-                        result["youtube_notes"] = (
-                            f'Short stream at {stream["start_hour"]:.1f}h'
-                        )
-                    elif 10 <= stream["start_hour"] <= 12:
-                        result["youtube_1045am"] = stream["views"]
-                        result["youtube_notes"] = (
-                            f'Short stream at {stream["start_hour"]:.1f}h'
-                        )
-                    else:
-                        result["youtube_notes"] = (
-                            f'Stream at {stream["start_hour"]:.1f}h (unclear service)'
-                        )
-            else:
-                result["youtube_notes"] = f"{len(streams)} streams found"
+                result = self.find_stream_for_date(current_date, all_streams)
 
-            results.append(result)
+                # Convert to the expected format
+                formatted_result = {
+                    "date": current_date.strftime("%m/%d/%Y"),
+                    "youtube_9am": result.get("9am"),
+                    "youtube_1045am": result.get("10:45am"),
+                    "youtube_notes": result.get("notes", ""),
+                }
 
-        # Save to CSV
-        if results:
-            df = pd.DataFrame(results)
-            df.to_csv(output_file, index=False, encoding="utf-8-sig")
-            print(f"✅ Processed {len(results)} dates, saved to {output_file}")
-        else:
-            print("No results to save.")
+                results.append(formatted_result)
 
+            current_date += timedelta(days=1)
+
+        print(f"✅ Processed {len(results)} Sundays")
         return results
 
 
