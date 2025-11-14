@@ -72,14 +72,17 @@ The main script (`src/main.py`) has two modes:
 **Database Publishing (Default):**
 
 ```bash
-# Publish from default processed CSV
+# Publish from default CSV
 python src/main.py
 
-# Publish from specific CSV file
+# Publish from specific CSV
 python src/main.py --csv data/my_processed_data.csv
 
 # Dry run (show what would be published)
 python src/main.py --dry-run
+
+# Overwrite existing data
+python src/main.py --overwrite
 ```
 
 **Full Analytics Processing:**
@@ -93,6 +96,9 @@ python src/main.py --process --csv data/my_input.csv
 
 # Process analytics in dry-run mode
 python src/main.py --process --dry-run
+
+# Process and overwrite existing data
+python src/main.py --process --overwrite
 ```
 
 ### Individual Analytics Scripts
@@ -134,6 +140,9 @@ docker-compose run --rm online-stats python src/main.py --process
 
 # Dry run
 docker-compose run --rm online-stats python src/main.py --dry-run
+
+# Overwrite existing data
+docker-compose run --rm online-stats python src/main.py --overwrite
 ```
 
 ## API Requirements

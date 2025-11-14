@@ -139,7 +139,9 @@ class OnlineStatsPublisher:
             print(f"Warning: Could not convert '{value}' to numeric")
             return None
 
-    def publish_to_database(self, stats, data_date=None, dry_run=False):
+    def publish_to_database(
+        self, stats, data_date=None, dry_run=False, overwrite=False
+    ):
         """Publish statistics to the database."""
         if dry_run:
             print("🔍 DRY RUN: Would publish the following statistics to database:")
@@ -148,6 +150,7 @@ class OnlineStatsPublisher:
             print(f"   Vimeo 10:45AM: {stats['vimeo_1045am']}")
             print(f"   Vimeo 9AM: {stats['vimeo_9am']}")
             print(f"   YouTube 10:45AM: {stats['youtube_1045am']}")
+            print(f"   Overwrite: {overwrite}")
             print(f"   Created At: {datetime.now()}")
             print("✅ Dry run completed - no database changes made!")
             return
@@ -161,17 +164,56 @@ class OnlineStatsPublisher:
 
             # Check if data already exists for this date
             if data_date:
-                check_query = "SELECT COUNT(*) FROM online_stats WHERE date = %s"
-                cursor.execute(check_query, (data_date,))
-                exists = cursor.fetchone()[0] > 0
+                select_query = """
+                SELECT youtube_9am, vimeo_1045am, vimeo_9am, youtube_1045am
+                FROM online_stats
+                WHERE date = %s
+                """
+                cursor.execute(select_query, (data_date,))
+                existing_row = cursor.fetchone()
 
-                if exists:
-                    print(
-                        f"ℹ️  Data for date {data_date} already exists in database. Skipping insert."
-                    )
-                    return
+                if existing_row:
+                    # Check if any columns have actual data (not null)
+                    has_data = any(val is not None for val in existing_row)
 
-            # Insert the data
+                    if has_data and not overwrite:
+                        print(
+                            f"ℹ️  Data for date {data_date} already exists with values in database. Skipping insert."
+                        )
+                        print(f"   Use --overwrite to force update existing data.")
+                        return
+                    elif has_data and overwrite:
+                        # Update existing record
+                        update_query = """
+                        UPDATE online_stats
+                        SET youtube_9am = %s, vimeo_1045am = %s, vimeo_9am = %s, youtube_1045am = %s, updated_at = %s
+                        WHERE date = %s
+                        """
+                        updated_at = datetime.now()
+                        cursor.execute(
+                            update_query,
+                            (
+                                stats["youtube_9am"],
+                                stats["vimeo_1045am"],
+                                stats["vimeo_9am"],
+                                stats["youtube_1045am"],
+                                updated_at,
+                                data_date,
+                            ),
+                        )
+                        conn.commit()
+                        print(
+                            "✅ Successfully updated existing statistics in database!"
+                        )
+                        print(f"   Date: {data_date}")
+                        print(f"   YouTube 9AM: {stats['youtube_9am']}")
+                        print(f"   Vimeo 10:45AM: {stats['vimeo_1045am']}")
+                        print(f"   Vimeo 9AM: {stats['vimeo_9am']}")
+                        print(f"   YouTube 10:45AM: {stats['youtube_1045am']}")
+                        return
+                    # If no data exists, fall through to INSERT
+
+            # Insert new record
             insert_query = """
             INSERT INTO online_stats (date, youtube_9am, vimeo_1045am, vimeo_9am, youtube_1045am, created_at)
             VALUES (%s, %s, %s, %s, %s, %s)
@@ -211,7 +253,9 @@ class OnlineStatsPublisher:
             if conn:
                 conn.close()
 
-    def run_complete_process(self, input_csv="attendance.csv", dry_run=False):
+    def run_complete_process(
+        self, input_csv="attendance.csv", dry_run=False, overwrite=False
+    ):
         """Run the complete process: analytics + database publishing."""
         if dry_run:
             print("🔍 DRY RUN MODE: No actual changes will be made to the database")
@@ -225,7 +269,9 @@ class OnlineStatsPublisher:
             stats, data_date = self.extract_latest_stats()
 
             # Step 3: Publish to database (or simulate in dry-run mode)
-            self.publish_to_database(stats, data_date, dry_run=dry_run)
+            self.publish_to_database(
+                stats, data_date, dry_run=dry_run, overwrite=overwrite
+            )
 
             if dry_run:
                 print("\n🎭 Dry run completed successfully - no database changes made!")
@@ -236,7 +282,9 @@ class OnlineStatsPublisher:
             print(f"\n💥 Process failed: {e}")
             sys.exit(1)
 
-    def publish_from_csv(self, csv_file="attendance_with_vimeo.csv", dry_run=False):
+    def publish_from_csv(
+        self, csv_file="attendance_with_vimeo.csv", dry_run=False, overwrite=False
+    ):
         """Extract statistics from processed CSV and publish to database."""
         print("Publishing Statistics to Database")
         print("=" * 40)
@@ -246,7 +294,9 @@ class OnlineStatsPublisher:
             stats, data_date = self.extract_stats_from_csv(csv_file)
 
             # Step 2: Publish to database (or simulate in dry-run mode)
-            self.publish_to_database(stats, data_date, dry_run=dry_run)
+            self.publish_to_database(
+                stats, data_date, dry_run=dry_run, overwrite=overwrite
+            )
 
             if dry_run:
                 print("\n🎭 Dry run completed successfully - no database changes made!")
@@ -330,6 +380,11 @@ def main():
         action="store_true",
         help="Run in dry-run mode (no database changes will be made)",
     )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Overwrite existing data even if columns already have values",
+    )
 
     args = parser.parse_args()
 
@@ -338,10 +393,14 @@ def main():
 
         if args.process:
             # Run full analytics processing
-            publisher.run_complete_process(args.csv, dry_run=args.dry_run)
+            publisher.run_complete_process(
+                args.csv, dry_run=args.dry_run, overwrite=args.overwrite
+            )
         else:
             # Just publish from existing CSV
-            publisher.publish_from_csv(args.csv, dry_run=args.dry_run)
+            publisher.publish_from_csv(
+                args.csv, dry_run=args.dry_run, overwrite=args.overwrite
+            )
 
     except KeyboardInterrupt:
         print("\nProcess interrupted by user.")
