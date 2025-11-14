@@ -4,6 +4,8 @@ services:
   online-stats:
     build: .
     container_name: online-stats
+    ports:
+      - "8000:8000"
     volumes:
       - .:/app
       - ./data:/app/data
@@ -12,4 +14,4 @@ services:
       - PYTHONPATH=/app
     env_file:
       - .env
-    command: python src/main.py
+    command: python api.py

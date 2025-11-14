@@ -6,7 +6,9 @@ A Python application for analyzing video statistics from multiple platforms incl
 
 ```
 online-stats/
+├── api.py                 # FastAPI server for programmatic access
 ├── src/                    # Source code
+│   ├── main.py            # Main analytics pipeline
 │   ├── vimeo.py           # Vimeo API integration
 │   └── youtube.py         # YouTube API integration
 ├── data/                  # Data files and inputs
@@ -125,6 +127,78 @@ docker-compose run --rm online-stats python src/main.py --dry-run
 # Overwrite existing data
 docker-compose run --rm online-stats python src/main.py --overwrite
 ```
+
+## API Usage
+
+The application includes a REST API server for programmatic access.
+
+### Starting the API Server
+
+**Local development:**
+
+```bash
+# Install API dependencies
+pip install fastapi uvicorn
+
+# Start the API server
+python api.py
+```
+
+**Docker:**
+
+```bash
+# Start API server
+docker-compose up --build
+
+# API will be available at http://localhost:8000
+```
+
+### API Endpoints
+
+**GET /** - API information and links to documentation
+
+**GET /health** - Health check endpoint
+
+**POST /analytics** - Run video analytics
+
+### Running Analytics via API
+
+Send a POST request to `/analytics` with JSON payload:
+
+```bash
+curl -X POST "http://localhost:8000/analytics" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "start_date": "2024-01-01",
+    "end_date": "2024-01-31",
+    "dry_run": false,
+    "overwrite": false
+  }'
+```
+
+**Parameters:**
+
+- `start_date` (required): Start date in YYYY-MM-DD format
+- `end_date` (required): End date in YYYY-MM-DD format
+- `dry_run` (optional): Set to `true` for dry-run mode (default: `false`)
+- `overwrite` (optional): Set to `true` to overwrite existing data (default: `false`)
+
+**Response:**
+
+```json
+{
+  "task_id": "analytics_2024-01-01_2024-01-31",
+  "status": "started",
+  "message": "Analytics started for date range 2024-01-01 to 2024-01-31"
+}
+```
+
+### API Documentation
+
+When the API server is running, visit:
+
+- **Interactive API docs**: `http://localhost:8000/docs`
+- **Alternative docs**: `http://localhost:8000/redoc`
 
 ## API Requirements
 
