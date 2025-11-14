@@ -67,20 +67,32 @@ online-stats/
 
 ### Running the Complete Analytics Pipeline
 
-The main script (`src/main.py`) runs both YouTube and Vimeo analytics and publishes results to the database:
+The main script (`src/main.py`) has two modes:
+
+**Database Publishing (Default):**
 
 ```bash
-# Run with default attendance.csv
+# Publish from default processed CSV
 python src/main.py
 
-# Run with custom CSV file
-python src/main.py --csv data/my_attendance.csv
+# Publish from specific CSV file
+python src/main.py --csv data/my_processed_data.csv
 
-# Dry run mode (no database changes)
+# Dry run (show what would be published)
 python src/main.py --dry-run
+```
 
-# Dry run with custom CSV
-python src/main.py --csv data/my_attendance.csv --dry-run
+**Full Analytics Processing:**
+
+```bash
+# Process analytics and publish
+python src/main.py --process
+
+# Process analytics with custom input CSV
+python src/main.py --process --csv data/my_input.csv
+
+# Process analytics in dry-run mode
+python src/main.py --process --dry-run
 ```
 
 ### Individual Analytics Scripts
@@ -114,10 +126,13 @@ docker-compose run --rm online-stats python src/youtube.py
 # Vimeo analytics
 docker-compose run --rm online-stats python src/vimeo.py
 
-# Complete pipeline
+# Publish to database (default)
 docker-compose run --rm online-stats python src/main.py
 
-# Complete pipeline in dry-run mode
+# Process analytics and publish
+docker-compose run --rm online-stats python src/main.py --process
+
+# Dry run
 docker-compose run --rm online-stats python src/main.py --dry-run
 ```
 

@@ -212,18 +212,84 @@ class OnlineStatsPublisher:
             print(f"\n💥 Process failed: {e}")
             sys.exit(1)
 
+    def publish_from_csv(self, csv_file="attendance_with_vimeo.csv", dry_run=False):
+        """Extract statistics from processed CSV and publish to database."""
+        print("Publishing Statistics to Database")
+        print("=" * 40)
+
+        try:
+            # Step 1: Extract latest stats from CSV
+            stats = self.extract_stats_from_csv(csv_file)
+
+            # Step 2: Publish to database (or simulate in dry-run mode)
+            self.publish_to_database(stats, dry_run=dry_run)
+
+            if dry_run:
+                print("\n🎭 Dry run completed successfully - no database changes made!")
+            else:
+                print("\n🎉 Database update completed successfully!")
+
+        except Exception as e:
+            print(f"\n💥 Process failed: {e}")
+            sys.exit(1)
+
+    def extract_stats_from_csv(self, csv_file):
+        """Extract the latest statistics from a specific CSV file."""
+        if not os.path.exists(csv_file):
+            raise FileNotFoundError(f"CSV file not found: {csv_file}")
+
+        try:
+            df = pd.read_csv(csv_file)
+
+            # Get the most recent row (assuming sorted by date)
+            if len(df) == 0:
+                raise ValueError("No data found in CSV file")
+
+            # Sort by date to get the latest
+            df["date_parsed"] = pd.to_datetime(df["date"], errors="coerce")
+            df = df.sort_values("date_parsed", ascending=False)
+            latest_row = df.iloc[0]
+
+            # Extract the required columns
+            stats = {
+                "youtube_9am": self._extract_numeric_value(
+                    latest_row.get("youtube 9am")
+                ),
+                "vimeo_1045am": self._extract_numeric_value(
+                    latest_row.get("vimeo 1045am")
+                ),
+                "vimeo_9am": self._extract_numeric_value(latest_row.get("vimeo 9am")),
+                "youtube_1045am": self._extract_numeric_value(
+                    latest_row.get("youtube 1045am")
+                ),
+            }
+
+            print(f"Extracted stats for date: {latest_row.get('date')}")
+            print(f"Stats: {stats}")
+
+            return stats
+
+        except Exception as e:
+            print(f"Error extracting stats from CSV: {e}")
+            raise
+
 
 def main():
     """Main entry point."""
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Run online video statistics processing and publish to database"
+        description="Publish online video statistics to database"
     )
     parser.add_argument(
         "--csv",
-        default="attendance.csv",
-        help="Input CSV file path (default: attendance.csv)",
+        default="attendance_with_vimeo.csv",
+        help="CSV file to read statistics from (default: attendance_with_vimeo.csv)",
+    )
+    parser.add_argument(
+        "--process",
+        action="store_true",
+        help="Run analytics processing before publishing (runs YouTube and Vimeo analytics)",
     )
     parser.add_argument(
         "--dry-run",
@@ -235,7 +301,14 @@ def main():
 
     try:
         publisher = OnlineStatsPublisher()
-        publisher.run_complete_process(args.csv, dry_run=args.dry_run)
+
+        if args.process:
+            # Run full analytics processing
+            publisher.run_complete_process(args.csv, dry_run=args.dry_run)
+        else:
+            # Just publish from existing CSV
+            publisher.publish_from_csv(args.csv, dry_run=args.dry_run)
+
     except KeyboardInterrupt:
         print("\nProcess interrupted by user.")
         sys.exit(1)
