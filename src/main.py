@@ -17,17 +17,18 @@ from youtube import YouTubeLiveViewsFinder
 # Load environment variables
 load_dotenv()
 
+
 class OnlineStatsPublisher:
     """Main class to orchestrate analytics processing and database publishing."""
 
     def __init__(self):
         """Initialize with database connection."""
         self.db_config = {
-            'host': os.getenv('DB_HOST'),
-            'port': os.getenv('DB_PORT'),
-            'database': os.getenv('DB_NAME'),
-            'user': os.getenv('DB_USER'),
-            'password': os.getenv('DB_PASSWORD')
+            "host": os.getenv("DB_HOST"),
+            "port": os.getenv("DB_PORT"),
+            "database": os.getenv("DB_NAME"),
+            "user": os.getenv("DB_USER"),
+            "password": os.getenv("DB_PASSWORD"),
         }
 
         # Validate database configuration
@@ -43,7 +44,7 @@ class OnlineStatsPublisher:
             print(f"Database connection error: {e}")
             raise
 
-    def run_analytics(self, input_csv='attendance.csv'):
+    def run_analytics(self, input_csv="attendance.csv"):
         """Run both Vimeo and YouTube analytics."""
         print("Starting Online Video Statistics Processing")
         print("=" * 50)
@@ -51,7 +52,9 @@ class OnlineStatsPublisher:
         # Check if input CSV exists
         if not os.path.exists(input_csv):
             print(f"❌ Input CSV file not found: {input_csv}")
-            print("Please ensure your attendance CSV file is in the project root or data/ directory.")
+            print(
+                "Please ensure your attendance CSV file is in the project root or data/ directory."
+            )
             raise FileNotFoundError(f"Input CSV file not found: {input_csv}")
 
         try:
@@ -61,7 +64,7 @@ class OnlineStatsPublisher:
             youtube_finder.process_attendance_csv(input_csv)
 
             # Step 2: Run Vimeo analytics (uses the YouTube-processed file)
-            youtube_output = input_csv.replace('.csv', '_with_youtube.csv')
+            youtube_output = input_csv.replace(".csv", "_with_youtube.csv")
             print(f"\n2. Running Vimeo Analytics on: {youtube_output}")
             vimeo_finder = VimeoLiveViewsFinder()
             vimeo_finder.process_attendance_csv(youtube_output)
@@ -74,7 +77,7 @@ class OnlineStatsPublisher:
 
     def extract_latest_stats(self):
         """Extract the latest statistics from the processed CSV."""
-        csv_file = 'attendance_with_vimeo.csv'  # Final output from Vimeo processing
+        csv_file = "attendance_with_vimeo.csv"  # Final output from Vimeo processing
 
         if not os.path.exists(csv_file):
             raise FileNotFoundError(f"Processed CSV file not found: {csv_file}")
@@ -87,16 +90,22 @@ class OnlineStatsPublisher:
                 raise ValueError("No data found in CSV file")
 
             # Sort by date to get the latest
-            df['date_parsed'] = pd.to_datetime(df['date'], errors='coerce')
-            df = df.sort_values('date_parsed', ascending=False)
+            df["date_parsed"] = pd.to_datetime(df["date"], errors="coerce")
+            df = df.sort_values("date_parsed", ascending=False)
             latest_row = df.iloc[0]
 
             # Extract the required columns
             stats = {
-                'youtube_9am': self._extract_numeric_value(latest_row.get('youtube 9am')),
-                'vimeo_1045am': self._extract_numeric_value(latest_row.get('vimeo 1045am')),
-                'vimeo_9am': self._extract_numeric_value(latest_row.get('vimeo 9am')),
-                'youtube_1045am': self._extract_numeric_value(latest_row.get('youtube 1045am'))
+                "youtube_9am": self._extract_numeric_value(
+                    latest_row.get("youtube 9am")
+                ),
+                "vimeo_1045am": self._extract_numeric_value(
+                    latest_row.get("vimeo 1045am")
+                ),
+                "vimeo_9am": self._extract_numeric_value(latest_row.get("vimeo 9am")),
+                "youtube_1045am": self._extract_numeric_value(
+                    latest_row.get("youtube 1045am")
+                ),
             }
 
             print(f"Extracted stats for date: {latest_row.get('date')}")
@@ -110,7 +119,7 @@ class OnlineStatsPublisher:
 
     def _extract_numeric_value(self, value):
         """Extract numeric value from various formats."""
-        if pd.isna(value) or value == '' or str(value).strip() == '':
+        if pd.isna(value) or value == "" or str(value).strip() == "":
             return None
 
         try:
@@ -120,8 +129,18 @@ class OnlineStatsPublisher:
             print(f"Warning: Could not convert '{value}' to numeric")
             return None
 
-    def publish_to_database(self, stats):
+    def publish_to_database(self, stats, dry_run=False):
         """Publish statistics to the database."""
+        if dry_run:
+            print("🔍 DRY RUN: Would publish the following statistics to database:")
+            print(f"   YouTube 9AM: {stats['youtube_9am']}")
+            print(f"   Vimeo 10:45AM: {stats['vimeo_1045am']}")
+            print(f"   Vimeo 9AM: {stats['vimeo_9am']}")
+            print(f"   YouTube 10:45AM: {stats['youtube_1045am']}")
+            print(f"   Created At: {datetime.now()}")
+            print("✅ Dry run completed - no database changes made!")
+            return
+
         conn = None
         cursor = None
 
@@ -138,13 +157,16 @@ class OnlineStatsPublisher:
 
             created_at = datetime.now()
 
-            cursor.execute(insert_query, (
-                stats['youtube_9am'],
-                stats['vimeo_1045am'],
-                stats['vimeo_9am'],
-                stats['youtube_1045am'],
-                created_at
-            ))
+            cursor.execute(
+                insert_query,
+                (
+                    stats["youtube_9am"],
+                    stats["vimeo_1045am"],
+                    stats["vimeo_9am"],
+                    stats["youtube_1045am"],
+                    created_at,
+                ),
+            )
 
             conn.commit()
 
@@ -165,8 +187,12 @@ class OnlineStatsPublisher:
             if conn:
                 conn.close()
 
-    def run_complete_process(self, input_csv='attendance.csv'):
+    def run_complete_process(self, input_csv="attendance.csv", dry_run=False):
         """Run the complete process: analytics + database publishing."""
+        if dry_run:
+            print("🔍 DRY RUN MODE: No actual changes will be made to the database")
+            print("=" * 60)
+
         try:
             # Step 1: Run analytics
             self.run_analytics(input_csv)
@@ -174,10 +200,13 @@ class OnlineStatsPublisher:
             # Step 2: Extract latest stats
             stats = self.extract_latest_stats()
 
-            # Step 3: Publish to database
-            self.publish_to_database(stats)
+            # Step 3: Publish to database (or simulate in dry-run mode)
+            self.publish_to_database(stats, dry_run=dry_run)
 
-            print("\n🎉 Complete process finished successfully!")
+            if dry_run:
+                print("\n🎭 Dry run completed successfully - no database changes made!")
+            else:
+                print("\n🎉 Complete process finished successfully!")
 
         except Exception as e:
             print(f"\n💥 Process failed: {e}")
@@ -188,15 +217,25 @@ def main():
     """Main entry point."""
     import argparse
 
-    parser = argparse.ArgumentParser(description='Run online video statistics processing and publish to database')
-    parser.add_argument('--csv', default='attendance.csv',
-                       help='Input CSV file path (default: attendance.csv)')
+    parser = argparse.ArgumentParser(
+        description="Run online video statistics processing and publish to database"
+    )
+    parser.add_argument(
+        "--csv",
+        default="attendance.csv",
+        help="Input CSV file path (default: attendance.csv)",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Run in dry-run mode (no database changes will be made)",
+    )
 
     args = parser.parse_args()
 
     try:
         publisher = OnlineStatsPublisher()
-        publisher.run_complete_process(args.csv)
+        publisher.run_complete_process(args.csv, dry_run=args.dry_run)
     except KeyboardInterrupt:
         print("\nProcess interrupted by user.")
         sys.exit(1)

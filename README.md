@@ -75,6 +75,12 @@ python src/main.py
 
 # Run with custom CSV file
 python src/main.py --csv data/my_attendance.csv
+
+# Dry run mode (no database changes)
+python src/main.py --dry-run
+
+# Dry run with custom CSV
+python src/main.py --csv data/my_attendance.csv --dry-run
 ```
 
 ### Individual Analytics Scripts
@@ -110,6 +116,9 @@ docker-compose run --rm online-stats python src/vimeo.py
 
 # Complete pipeline
 docker-compose run --rm online-stats python src/main.py
+
+# Complete pipeline in dry-run mode
+docker-compose run --rm online-stats python src/main.py --dry-run
 ```
 
 ## API Requirements
