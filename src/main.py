@@ -124,62 +124,6 @@ class OnlineStatsPublisher:
 
         return merged_results
 
-    def extract_latest_stats(self):
-        """Extract the latest statistics from the processed CSV."""
-        import glob
-
-        # Look for the most recent attendance CSV file (either old format or new date range format)
-        csv_files = glob.glob("attendance*.csv")
-        if not csv_files:
-            raise FileNotFoundError("No attendance CSV files found")
-
-        # Get the most recently modified file
-        csv_file = max(csv_files, key=os.path.getmtime)
-        print(f"Using CSV file: {csv_file}")
-
-        try:
-            df = pd.read_csv(csv_file)
-
-            # Get the most recent row (assuming sorted by date)
-            if len(df) == 0:
-                raise ValueError("No data found in CSV file")
-
-            # Sort by date to get the latest
-            df["date_parsed"] = pd.to_datetime(df["date"], errors="coerce")
-            df = df.sort_values("date_parsed", ascending=False)
-            latest_row = df.iloc[0]
-
-            # Extract the required columns (handle both old and new column names)
-            stats = {
-                "youtube_9am": self._extract_numeric_value(
-                    latest_row.get("youtube_9am") or latest_row.get("youtube 9am")
-                ),
-                "vimeo_1045am": self._extract_numeric_value(
-                    latest_row.get("vimeo_1045am") or latest_row.get("vimeo 1045am")
-                ),
-                "vimeo_9am": self._extract_numeric_value(
-                    latest_row.get("vimeo_9am") or latest_row.get("vimeo 9am")
-                ),
-                "youtube_1045am": self._extract_numeric_value(
-                    latest_row.get("youtube_1045am") or latest_row.get("youtube 1045am")
-                ),
-            }
-
-            # Get the date for this data
-            data_date = latest_row.get("date")
-            if data_date:
-                # Try to parse and format the date consistently
-                try:
-                    parsed_date = pd.to_datetime(data_date).date()
-                    data_date = parsed_date.isoformat()
-                except:
-                    pass  # Keep original format if parsing fails
-
-            print(f"Extracted stats for date: {data_date}")
-            print(f"Stats: {stats}")
-
-            return stats, data_date
-
     def publish_to_database(
         self, stats, data_date=None, dry_run=False, overwrite=False
     ):
