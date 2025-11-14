@@ -31,19 +31,21 @@ online-stats/
 ### Local Development
 
 1. Clone the repository:
-   ```
-   bash
+
+   ```bash
    git clone <repository-url>
    cd online-stats
    ```
 
-2. Create a virtual environment:
+2. Create and activate a virtual environment:
+
    ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   python3 -m venv .venv
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
    ```
 
 3. Install dependencies:
+
    ```bash
    pip install -r requirements.txt
    ```
@@ -52,6 +54,21 @@ online-stats/
    - Copy `.env.example` to `.env` and fill in your API credentials
    - For YouTube: Set up OAuth credentials and download `client_secret.json`
    - For Vimeo: Get your access token and user ID
+
+5. Start the API server:
+
+   ```bash
+   # Make sure virtual environment is activated
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+   # Start the API server
+   python api.py
+   ```
+
+   The API will be available at:
+   - **API Server**: `http://localhost:8000`
+   - **Interactive Docs**: `http://localhost:8000/docs`
+   - **Health Check**: `http://localhost:8000/health`
 
 ### Docker Setup
 
