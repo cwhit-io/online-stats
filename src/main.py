@@ -108,10 +108,20 @@ class OnlineStatsPublisher:
                 ),
             }
 
-            print(f"Extracted stats for date: {latest_row.get('date')}")
+            # Get the date for this data
+            data_date = latest_row.get("date")
+            if data_date:
+                # Try to parse and format the date consistently
+                try:
+                    parsed_date = pd.to_datetime(data_date).date()
+                    data_date = parsed_date.isoformat()
+                except:
+                    pass  # Keep original format if parsing fails
+
+            print(f"Extracted stats for date: {data_date}")
             print(f"Stats: {stats}")
 
-            return stats
+            return stats, data_date
 
         except Exception as e:
             print(f"Error extracting stats from CSV: {e}")
@@ -129,10 +139,11 @@ class OnlineStatsPublisher:
             print(f"Warning: Could not convert '{value}' to numeric")
             return None
 
-    def publish_to_database(self, stats, dry_run=False):
+    def publish_to_database(self, stats, data_date=None, dry_run=False):
         """Publish statistics to the database."""
         if dry_run:
             print("🔍 DRY RUN: Would publish the following statistics to database:")
+            print(f"   Date: {data_date}")
             print(f"   YouTube 9AM: {stats['youtube_9am']}")
             print(f"   Vimeo 10:45AM: {stats['vimeo_1045am']}")
             print(f"   Vimeo 9AM: {stats['vimeo_9am']}")
@@ -148,11 +159,22 @@ class OnlineStatsPublisher:
             conn = self.get_db_connection()
             cursor = conn.cursor()
 
-            # Insert or update the online_stats table
-            # Assuming we want to insert a new row each time
+            # Check if data already exists for this date
+            if data_date:
+                check_query = "SELECT COUNT(*) FROM online_stats WHERE date = %s"
+                cursor.execute(check_query, (data_date,))
+                exists = cursor.fetchone()[0] > 0
+
+                if exists:
+                    print(
+                        f"ℹ️  Data for date {data_date} already exists in database. Skipping insert."
+                    )
+                    return
+
+            # Insert the data
             insert_query = """
-            INSERT INTO online_stats (youtube_9am, vimeo_1045am, vimeo_9am, youtube_1045am, created_at)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO online_stats (date, youtube_9am, vimeo_1045am, vimeo_9am, youtube_1045am, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s)
             """
 
             created_at = datetime.now()
@@ -160,6 +182,7 @@ class OnlineStatsPublisher:
             cursor.execute(
                 insert_query,
                 (
+                    data_date,
                     stats["youtube_9am"],
                     stats["vimeo_1045am"],
                     stats["vimeo_9am"],
@@ -171,6 +194,7 @@ class OnlineStatsPublisher:
             conn.commit()
 
             print("✅ Successfully published statistics to database!")
+            print(f"   Date: {data_date}")
             print(f"   YouTube 9AM: {stats['youtube_9am']}")
             print(f"   Vimeo 10:45AM: {stats['vimeo_1045am']}")
             print(f"   Vimeo 9AM: {stats['vimeo_9am']}")
@@ -198,10 +222,10 @@ class OnlineStatsPublisher:
             self.run_analytics(input_csv)
 
             # Step 2: Extract latest stats
-            stats = self.extract_latest_stats()
+            stats, data_date = self.extract_latest_stats()
 
             # Step 3: Publish to database (or simulate in dry-run mode)
-            self.publish_to_database(stats, dry_run=dry_run)
+            self.publish_to_database(stats, data_date, dry_run=dry_run)
 
             if dry_run:
                 print("\n🎭 Dry run completed successfully - no database changes made!")
@@ -219,10 +243,10 @@ class OnlineStatsPublisher:
 
         try:
             # Step 1: Extract latest stats from CSV
-            stats = self.extract_stats_from_csv(csv_file)
+            stats, data_date = self.extract_stats_from_csv(csv_file)
 
             # Step 2: Publish to database (or simulate in dry-run mode)
-            self.publish_to_database(stats, dry_run=dry_run)
+            self.publish_to_database(stats, data_date, dry_run=dry_run)
 
             if dry_run:
                 print("\n🎭 Dry run completed successfully - no database changes made!")
@@ -264,10 +288,20 @@ class OnlineStatsPublisher:
                 ),
             }
 
-            print(f"Extracted stats for date: {latest_row.get('date')}")
+            # Get the date for this data
+            data_date = latest_row.get("date")
+            if data_date:
+                # Try to parse and format the date consistently
+                try:
+                    parsed_date = pd.to_datetime(data_date).date()
+                    data_date = parsed_date.isoformat()
+                except:
+                    pass  # Keep original format if parsing fails
+
+            print(f"Extracted stats for date: {data_date}")
             print(f"Stats: {stats}")
 
-            return stats
+            return stats, data_date
 
         except Exception as e:
             print(f"Error extracting stats from CSV: {e}")
