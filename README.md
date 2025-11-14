@@ -65,40 +65,19 @@ online-stats/
 
 ## Usage
 
-### Running the Complete Analytics Pipeline
+### Running the Analytics Pipeline
 
-The main script (`src/main.py`) has two modes:
-
-**Database Publishing (Default):**
+Process online video statistics for a date range and publish to database:
 
 ```bash
-# Publish from default CSV
-python src/main.py
+# Process analytics for a date range and publish
+python src/main.py --start-date 2024-01-01 --end-date 2024-01-31
 
-# Publish from specific CSV
-python src/main.py --csv data/my_processed_data.csv
-
-# Dry run (show what would be published)
-python src/main.py --dry-run
-
-# Overwrite existing data
-python src/main.py --overwrite
-```
-
-**Full Analytics Processing:**
-
-```bash
-# Process analytics and publish
-python src/main.py --process
-
-# Process analytics with custom input CSV
-python src/main.py --process --csv data/my_input.csv
-
-# Process analytics in dry-run mode
-python src/main.py --process --dry-run
+# Process analytics with dry-run mode (no database changes)
+python src/main.py --start-date 2024-01-01 --end-date 2024-01-31 --dry-run
 
 # Process and overwrite existing data
-python src/main.py --process --overwrite
+python src/main.py --start-date 2024-01-01 --end-date 2024-01-31 --overwrite
 ```
 
 ### Individual Analytics Scripts
@@ -106,13 +85,15 @@ python src/main.py --process --overwrite
 **YouTube Analytics:**
 
 ```bash
-python src/youtube.py
+# Process date range (saves to CSV)
+python src/youtube.py --start-date 2024-01-01 --end-date 2024-01-31
 ```
 
 **Vimeo Analytics:**
 
 ```bash
-python src/vimeo.py
+# Process date range (saves to CSV)
+python src/vimeo.py --start-date 2024-01-01 --end-date 2024-01-31
 ```
 
 ### Docker Usage

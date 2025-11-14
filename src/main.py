@@ -5,8 +5,6 @@ Main script to run Vimeo and YouTube analytics and publish results to database.
 
 import os
 import sys
-import pandas as pd
-import psycopg2
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -39,48 +37,105 @@ class OnlineStatsPublisher:
     def get_db_connection(self):
         """Get database connection."""
         try:
+            import psycopg2
+
             return psycopg2.connect(**self.db_config)
         except Exception as e:
             print(f"Database connection error: {e}")
             raise
 
-    def run_analytics(self, input_csv="attendance.csv"):
+    def run_analytics(self, start_date=None, end_date=None):
         """Run both Vimeo and YouTube analytics."""
         print("Starting Online Video Statistics Processing")
         print("=" * 50)
 
-        # Check if input CSV exists
-        if not os.path.exists(input_csv):
-            print(f"❌ Input CSV file not found: {input_csv}")
-            print(
-                "Please ensure your attendance CSV file is in the project root or data/ directory."
-            )
-            raise FileNotFoundError(f"Input CSV file not found: {input_csv}")
+        # Parse date arguments
+        if start_date:
+            try:
+                start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
+            except ValueError:
+                raise ValueError(
+                    f"Invalid start date format: {start_date}. Use YYYY-MM-DD format."
+                )
+
+        if end_date:
+            try:
+                end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
+            except ValueError:
+                raise ValueError(
+                    f"Invalid end date format: {end_date}. Use YYYY-MM-DD format."
+                )
+
+        if not start_date or not end_date:
+            raise ValueError("Both start_date and end_date must be provided")
 
         try:
             # Step 1: Run YouTube analytics
             print("\n1. Running YouTube Analytics...")
             youtube_finder = YouTubeLiveViewsFinder()
-            youtube_finder.process_attendance_csv(input_csv)
+            youtube_results = youtube_finder.process_date_range(start_date, end_date)
 
-            # Step 2: Run Vimeo analytics (uses the YouTube-processed file)
-            youtube_output = input_csv.replace(".csv", "_with_youtube.csv")
-            print(f"\n2. Running Vimeo Analytics on: {youtube_output}")
+            # Step 2: Run Vimeo analytics
+            print("\n2. Running Vimeo Analytics...")
             vimeo_finder = VimeoLiveViewsFinder()
-            vimeo_finder.process_attendance_csv(youtube_output)
+            vimeo_results = vimeo_finder.process_date_range(start_date, end_date)
+
+            # Step 3: Merge results
+            print("\n3. Merging YouTube and Vimeo results...")
+            merged_results = self.merge_analytics_results(
+                youtube_results, vimeo_results
+            )
 
             print("\n✅ Analytics processing completed successfully!")
+
+            return merged_results
 
         except Exception as e:
             print(f"❌ Error during analytics processing: {e}")
             raise
 
+    def merge_analytics_results(self, youtube_results, vimeo_results):
+        """Merge YouTube and Vimeo results by date."""
+        if not youtube_results and not vimeo_results:
+            return []
+
+        # Create dictionaries keyed by date for easy merging
+        youtube_dict = {row["date"]: row for row in youtube_results or []}
+        vimeo_dict = {row["date"]: row for row in vimeo_results or []}
+
+        # Get all unique dates
+        all_dates = set(youtube_dict.keys()) | set(vimeo_dict.keys())
+
+        merged_results = []
+        for date in sorted(all_dates):
+            youtube_row = youtube_dict.get(date, {})
+            vimeo_row = vimeo_dict.get(date, {})
+
+            merged_row = {
+                "date": date,
+                "youtube_9am": youtube_row.get("youtube_9am"),
+                "youtube_1045am": youtube_row.get("youtube_1045am"),
+                "youtube_notes": youtube_row.get("youtube_notes", ""),
+                "vimeo_9am": vimeo_row.get("vimeo_9am"),
+                "vimeo_1045am": vimeo_row.get("vimeo_1045am"),
+                "vimeo_notes": vimeo_row.get("vimeo_notes", ""),
+            }
+            merged_results.append(merged_row)
+
+        return merged_results
+
     def extract_latest_stats(self):
         """Extract the latest statistics from the processed CSV."""
-        csv_file = "attendance_with_vimeo.csv"  # Final output from Vimeo processing
+        import glob
 
-        if not os.path.exists(csv_file):
-            raise FileNotFoundError(f"Processed CSV file not found: {csv_file}")
+        # Look for the most recent attendance CSV file (either old format or new date range format)
+        csv_files = glob.glob("attendance*.csv")
+        if not csv_files:
+            raise FileNotFoundError("No attendance CSV files found")
+
+        # Get the most recently modified file
+        csv_file = max(csv_files, key=os.path.getmtime)
+        print(f"Using CSV file: {csv_file}")
 
         try:
             df = pd.read_csv(csv_file)
@@ -94,17 +149,19 @@ class OnlineStatsPublisher:
             df = df.sort_values("date_parsed", ascending=False)
             latest_row = df.iloc[0]
 
-            # Extract the required columns
+            # Extract the required columns (handle both old and new column names)
             stats = {
                 "youtube_9am": self._extract_numeric_value(
-                    latest_row.get("youtube 9am")
+                    latest_row.get("youtube_9am") or latest_row.get("youtube 9am")
                 ),
                 "vimeo_1045am": self._extract_numeric_value(
-                    latest_row.get("vimeo 1045am")
+                    latest_row.get("vimeo_1045am") or latest_row.get("vimeo 1045am")
                 ),
-                "vimeo_9am": self._extract_numeric_value(latest_row.get("vimeo 9am")),
+                "vimeo_9am": self._extract_numeric_value(
+                    latest_row.get("vimeo_9am") or latest_row.get("vimeo 9am")
+                ),
                 "youtube_1045am": self._extract_numeric_value(
-                    latest_row.get("youtube 1045am")
+                    latest_row.get("youtube_1045am") or latest_row.get("youtube 1045am")
                 ),
             }
 
@@ -122,22 +179,6 @@ class OnlineStatsPublisher:
             print(f"Stats: {stats}")
 
             return stats, data_date
-
-        except Exception as e:
-            print(f"Error extracting stats from CSV: {e}")
-            raise
-
-    def _extract_numeric_value(self, value):
-        """Extract numeric value from various formats."""
-        if pd.isna(value) or value == "" or str(value).strip() == "":
-            return None
-
-        try:
-            # Convert to string first, then to int
-            return int(float(str(value).strip()))
-        except (ValueError, TypeError):
-            print(f"Warning: Could not convert '{value}' to numeric")
-            return None
 
     def publish_to_database(
         self, stats, data_date=None, dry_run=False, overwrite=False
@@ -254,7 +295,11 @@ class OnlineStatsPublisher:
                 conn.close()
 
     def run_complete_process(
-        self, input_csv="attendance.csv", dry_run=False, overwrite=False
+        self,
+        dry_run=False,
+        overwrite=False,
+        start_date=None,
+        end_date=None,
     ):
         """Run the complete process: analytics + database publishing."""
         if dry_run:
@@ -262,46 +307,32 @@ class OnlineStatsPublisher:
             print("=" * 60)
 
         try:
-            # Step 1: Run analytics
-            self.run_analytics(input_csv)
+            # Step 1: Run analytics and get merged results
+            merged_results = self.run_analytics(start_date=start_date, end_date=end_date)
 
-            # Step 2: Extract latest stats
-            stats, data_date = self.extract_latest_stats()
-
-            # Step 3: Publish to database (or simulate in dry-run mode)
-            self.publish_to_database(
-                stats, data_date, dry_run=dry_run, overwrite=overwrite
-            )
+            # Step 2: Publish each result to database
+            if merged_results:
+                print(f"\n4. Publishing {len(merged_results)} results to database...")
+                for result in merged_results:
+                    # Extract stats for this date
+                    stats = {
+                        "youtube_9am": result.get("youtube_9am"),
+                        "vimeo_1045am": result.get("vimeo_1045am"),
+                        "vimeo_9am": result.get("vimeo_9am"),
+                        "youtube_1045am": result.get("youtube_1045am"),
+                    }
+                    
+                    # Publish to database (or simulate in dry-run mode)
+                    self.publish_to_database(
+                        stats, result["date"], dry_run=dry_run, overwrite=overwrite
+                    )
+            else:
+                print("\n⚠️ No results to publish.")
 
             if dry_run:
                 print("\n🎭 Dry run completed successfully - no database changes made!")
             else:
                 print("\n🎉 Complete process finished successfully!")
-
-        except Exception as e:
-            print(f"\n💥 Process failed: {e}")
-            sys.exit(1)
-
-    def publish_from_csv(
-        self, csv_file="attendance_with_vimeo.csv", dry_run=False, overwrite=False
-    ):
-        """Extract statistics from processed CSV and publish to database."""
-        print("Publishing Statistics to Database")
-        print("=" * 40)
-
-        try:
-            # Step 1: Extract latest stats from CSV
-            stats, data_date = self.extract_stats_from_csv(csv_file)
-
-            # Step 2: Publish to database (or simulate in dry-run mode)
-            self.publish_to_database(
-                stats, data_date, dry_run=dry_run, overwrite=overwrite
-            )
-
-            if dry_run:
-                print("\n🎭 Dry run completed successfully - no database changes made!")
-            else:
-                print("\n🎉 Database update completed successfully!")
 
         except Exception as e:
             print(f"\n💥 Process failed: {e}")
@@ -348,32 +379,12 @@ class OnlineStatsPublisher:
                 except:
                     pass  # Keep original format if parsing fails
 
-            print(f"Extracted stats for date: {data_date}")
-            print(f"Stats: {stats}")
-
-            return stats, data_date
-
-        except Exception as e:
-            print(f"Error extracting stats from CSV: {e}")
-            raise
-
-
 def main():
     """Main entry point."""
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Publish online video statistics to database"
-    )
-    parser.add_argument(
-        "--csv",
-        default="attendance_with_vimeo.csv",
-        help="CSV file to read statistics from (default: attendance_with_vimeo.csv)",
-    )
-    parser.add_argument(
-        "--process",
-        action="store_true",
-        help="Run analytics processing before publishing (runs YouTube and Vimeo analytics)",
+        description="Process online video statistics and publish to database"
     )
     parser.add_argument(
         "--dry-run",
@@ -385,22 +396,31 @@ def main():
         action="store_true",
         help="Overwrite existing data even if columns already have values",
     )
+    parser.add_argument(
+        "--start-date",
+        type=str,
+        required=True,
+        help="Start date for processing (YYYY-MM-DD format)",
+    )
+    parser.add_argument(
+        "--end-date",
+        type=str,
+        required=True,
+        help="End date for processing (YYYY-MM-DD format)",
+    )
 
     args = parser.parse_args()
 
     try:
         publisher = OnlineStatsPublisher()
 
-        if args.process:
-            # Run full analytics processing
-            publisher.run_complete_process(
-                args.csv, dry_run=args.dry_run, overwrite=args.overwrite
-            )
-        else:
-            # Just publish from existing CSV
-            publisher.publish_from_csv(
-                args.csv, dry_run=args.dry_run, overwrite=args.overwrite
-            )
+        # Run analytics processing and publish to database
+        publisher.run_complete_process(
+            dry_run=args.dry_run,
+            overwrite=args.overwrite,
+            start_date=args.start_date,
+            end_date=args.end_date,
+        )
 
     except KeyboardInterrupt:
         print("\nProcess interrupted by user.")
